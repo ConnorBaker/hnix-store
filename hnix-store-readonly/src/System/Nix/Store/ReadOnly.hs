@@ -5,6 +5,7 @@ module System.Nix.Store.ReadOnly
   ( References(..)
   , makeStorePath
   , makeFixedOutputPath
+  , makeOutputPath
   , computeStorePathForPath
   ) where
 
@@ -110,6 +111,25 @@ makeFixedOutputPath storeDir method digest@(hashAlgo :=> h) refs =
             <> Data.Text.Encoding.encodeUtf8 (System.Nix.Hash.encodeDigestWith Base16 h)
             <> ":"
       in ("output:out", HashAlgo_SHA256 :=> h')
+
+-- | Compute the store path for a derivation output.
+--
+-- For regular (non-fixed-output) derivations, the output path is computed from:
+-- - The derivation's "hash modulo" (hash of the derivation with fixed-output inputs replaced by their output hashes)
+-- - The output name (e.g., "out", "dev", "lib")
+-- - The output path name (derivation name, or derivation name + "-" + output name for non-"out" outputs)
+--
+-- The hash input string is: @output:\<outputName\>:sha256:\<drvHashHex\>:\<storeDir\>:\<outputPathName\>@
+makeOutputPath
+  :: StoreDir
+  -> Data.Text.Text   -- ^ Output name (e.g., "out", "dev", "lib")
+  -> Digest SHA256    -- ^ Derivation hash modulo
+  -> StorePathName    -- ^ Output path name (computed by caller: drvName for "out", drvName-outputName otherwise)
+  -> StorePath
+makeOutputPath storeDir outputName drvHash outputPathName =
+  makeStorePath storeDir ty (HashAlgo_SHA256 :=> drvHash) outputPathName
+ where
+  ty = "output:" <> Data.Text.Encoding.encodeUtf8 outputName
 
 digestPath
   :: FilePath             -- ^ Local `FilePath` to add
